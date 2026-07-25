@@ -1,0 +1,6 @@
+/node_modules
+/dist
+/embedding/node_modules
+
+.env
+embedding/.env

@@ -1,0 +1,22 @@
+{
+  "name": "grabit3d-crawler",
+  "version": "1.0.0",
+  "description": "Telegram kanallaridan 3D model (rasm + arxiv) juftliklarini yig'uvchi crawler",
+  "main": "crawler.js",
+  "scripts": {
+    "start": "node crawler.js",
+    "bot": "node bot/index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.11.0",
+    "axios": "^1.18.1",
+    "cheerio": "^1.2.0",
+    "dotenv": "^16.4.5",
+    "input": "^1.0.1",
+    "jshint": "^2.13.6",
+    "mongoose": "^8.7.0",
+    "telegraf": "^4.16.3",
+    "telegram": "^2.26.16",
+     "@huggingface/transformers": "^4.0.0"
+  }
+}

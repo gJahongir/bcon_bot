@@ -1,0 +1,15 @@
+{
+  "name": "grabit3d-embedding",
+  "version": "1.0.0",
+  "description": "Saqlangan model rasmlari uchun CLIP embedding hisoblovchi skript",
+  "main": "generateEmbeddings.js",
+  
+  "scripts": {
+    "start": "node generateEmbeddings.js"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.0.0",
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.7.0"
+  }
+}
