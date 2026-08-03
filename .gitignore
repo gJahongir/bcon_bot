@@ -3,4 +3,6 @@
 /embedding/node_modules
 
 .env
+!.env
 embedding/.env
+!embedding/.env
