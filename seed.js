@@ -2,6 +2,9 @@
  * Vaqtinchalik test ma'lumotlar — bazaga 500 ta soxta 3D model qo'shadi.
  * Ishga tushirish: node seed.js
  * Tozalash:       node seed.js --clean
+ * 
+ * admin reklama yuborishini ozgartir unda 1 - bolib rasm yuborsin yoki rasmsiz keyin text va tasdiqlas tasdiqlash bosilganda boyagi rasm tepada vtext pasiga birikkan holda yuborilsin
+ * 
  */
 require('dotenv').config();
 require('dns').setDefaultResultOrder('ipv4first');

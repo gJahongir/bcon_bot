@@ -34,7 +34,7 @@ function createSession(userId, results, queryType = 'image', queryDescription = 
   const session = {
     results,
     currentPage: 0,
-    pageSize: 3,
+    pageSize: 1,
     queryType,
     queryDescription,
     lastActivity: Date.now()

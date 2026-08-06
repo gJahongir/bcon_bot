@@ -5,10 +5,12 @@
   "main": "crawler.js",
   "scripts": {
     "start": "node crawler.js",
-    "bot": "node bot/index.js"
+    "bot": "node bot/index.js",
+    "test": "jest"
   },
   "dependencies": {
-    "@google/genai": "^2.11.0",
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@huggingface/transformers": "^4.0.0",
     "axios": "^1.18.1",
     "cheerio": "^1.2.0",
     "dotenv": "^16.4.5",
@@ -16,7 +18,9 @@
     "jshint": "^2.13.6",
     "mongoose": "^8.7.0",
     "telegraf": "^4.16.3",
-    "telegram": "^2.26.16",
-     "@huggingface/transformers": "^4.0.0"
+    "telegram": "^2.26.16"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
   }
 }

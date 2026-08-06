@@ -43,6 +43,7 @@ async function loadCatalog(forceReload = false) {
       caption: 1,
       category: 1,
       tags: 1,
+      imagePath: 1,
       embedding: 1
     }
   ).lean();
@@ -61,6 +62,7 @@ async function loadCatalog(forceReload = false) {
       caption: doc.caption || '',
       category: doc.category || '',
       tags: doc.tags || [],
+      imagePath: doc.imagePath || '',
       embedding,
       norm: getVectorNorm(embedding)
     };
@@ -98,6 +100,7 @@ async function refreshCatalog() {
       caption: 1,
       category: 1,
       tags: 1,
+      imagePath: 1,
       embedding: 1
     }
   ).lean();
@@ -116,6 +119,7 @@ async function refreshCatalog() {
         caption: doc.caption || '',
         category: doc.category || '',
         tags: doc.tags || [],
+        imagePath: doc.imagePath || '',
         embedding,
         norm: getVectorNorm(embedding)
       });
@@ -179,6 +183,7 @@ async function findBestMatches(queryEmbedding, topK = 5, minScore = 0.5) {
       caption: item.caption,
       category: item.category,
       tags: item.tags,
+      imagePath: item.imagePath,
       score
     };
 
