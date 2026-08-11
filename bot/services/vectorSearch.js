@@ -17,6 +17,14 @@ function getVectorNorm(values) {
   return Math.sqrt(sum);
 }
 
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0400-\u04ff\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 /**
  * MongoDB'dan barcha embedding'li hujjatlarni xotiraga yuklaydi.
  * @param {boolean} forceReload - true bo'lsa, avvalgi katalogni tozalab, qaytadan yuklaydi
@@ -156,20 +164,21 @@ async function findBestMatches(queryEmbedding, topK = 5, minScore = 0.5) {
   }
 
   const best = [];
+  let worstScore = -Infinity;
+
   for (const item of catalog) {
-    let dot = 0;
-    const len = Math.min(queryVec.length, item.embedding.length);
-
-    for (let i = 0; i < len; i++) {
-      dot += queryVec[i] * item.embedding[i];
-    }
-
     if (item.norm === 0) {
       continue;
     }
 
+    let dot = 0;
+    const len = Math.min(queryVec.length, item.embedding.length);
+    for (let i = 0; i < len; i++) {
+      dot += queryVec[i] * item.embedding[i];
+    }
+
     const score = dot / (queryNorm * item.norm);
-    if (score < minScore) {
+    if (score < minScore || score <= worstScore) {
       continue;
     }
 
@@ -189,18 +198,78 @@ async function findBestMatches(queryEmbedding, topK = 5, minScore = 0.5) {
 
     if (best.length < topK) {
       best.push(candidate);
-      best.sort((a, b) => b.score - a.score);
+      if (best.length === topK) {
+        best.sort((a, b) => b.score - a.score);
+        worstScore = best[best.length - 1].score;
+      }
       continue;
     }
 
-    const worst = best[best.length - 1];
-    if (score > worst.score) {
-      best[best.length - 1] = candidate;
-      best.sort((a, b) => b.score - a.score);
+    let insertIndex = best.length;
+    for (let i = 0; i < best.length; i++) {
+      if (score > best[i].score) {
+        insertIndex = i;
+        break;
+      }
+    }
+
+    if (insertIndex < best.length) {
+      best.splice(insertIndex, 0, candidate);
+      best.pop();
+      worstScore = best[best.length - 1].score;
     }
   }
 
   return best;
+}
+
+async function findTextMatches(query, topK = 10) {
+  const queryTerms = normalizeText(query);
+  if (queryTerms.length === 0) {
+    return [];
+  }
+
+  if (!catalogLoaded || catalog.length === 0) {
+    await loadCatalog(true);
+  }
+
+  const candidates = [];
+
+  for (const item of catalog) {
+    const haystack = [
+      item.caption || '',
+      item.documentFileName || '',
+      item.category || '',
+      item.modelCode || '',
+      ...(item.tags || [])
+    ].join(' ').toLowerCase();
+
+    let score = 0;
+    for (const term of queryTerms) {
+      if (haystack.includes(term)) {
+        score += 1;
+      }
+    }
+
+    if (score > 0) {
+      candidates.push({
+        _id: item._id,
+        modelCode: item.modelCode,
+        channelUsername: item.channelUsername,
+        messageId: item.messageId,
+        photoMessageId: item.photoMessageId,
+        documentFileName: item.documentFileName,
+        caption: item.caption,
+        category: item.category,
+        tags: item.tags,
+        imagePath: item.imagePath,
+        score
+      });
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.slice(0, topK);
 }
 
 /**
@@ -247,5 +316,6 @@ module.exports = {
   loadCatalog,
   refreshCatalog,
   findBestMatches,
+  findTextMatches,
   getCatalogInfo
 };

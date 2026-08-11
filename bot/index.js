@@ -5,6 +5,7 @@ dns.setDefaultResultOrder('ipv4first');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const http = require('http');
 const https = require('https');
 const mongoose = require('mongoose');
 const axios = require('axios');
@@ -15,11 +16,22 @@ const { Readable } = require('stream');
 const Model3D = require('./models/Models3D');
 
 const { getImageEmbedding, getTextEmbedding, preloadModels } = require('./services/clipClient');
-const { loadCatalog, findBestMatches, refreshCatalog, getCatalogInfo } = require('./services/vectorSearch');
+const { loadCatalog, findBestMatches, findTextMatches, refreshCatalog, getCatalogInfo } = require('./services/vectorSearch');
 const { describeImage, analyzeTextQuery } = require('./services/cloudflareAi');
 
 const { createSession, getSession, getCurrentPage, nextPage, prevPage } = require('./services/userSession');
 const { getStats, getRandomModel, incrementSearchCounts } = require('./services/statsService');
+
+const axiosInstance = axios.create({
+  timeout: 60000,
+  httpAgent: new http.Agent({ keepAlive: true, family: 4 }),
+  httpsAgent: new https.Agent({ keepAlive: true, keepAliveMsecs: 10000, family: 4 }),
+  maxRedirects: 5,
+  headers: {
+    'User-Agent': 'TheKalonBot/1.0 (+https://github.com)',
+    Accept: 'application/octet-stream, image/*'
+  }
+});
 const { sendDbModelToChat, sendChannelMediaToChat } = require('./services/mediaService');
 const {
   initializeAdminConfig,
@@ -294,7 +306,7 @@ bot.on('photo', async (ctx, next) => {
 
   draft.photoFileId = photo.file_id;
   setPendingAdDraft(userId, draft);
-  await ctx.reply('📸 Rasm saqlandi. Endi matn yuboring yoki /confirm_ad bilan tasdiqlang.', {
+  await ctx.reply('Rasm saqlandi. Endi matn yuboring yoki /confirm_ad bilan tasdiqlang.', {
     reply_markup: getAdConfirmationKeyboard().reply_markup
   });
   return;
@@ -314,7 +326,7 @@ bot.start((ctx) => {
 
   ctx.reply(
     `Salom, ${name}! 👋\n\n` +
-    `🤖 Men *Bcin* — 3D modellar qidiruv yordamchisiman.\n\n` +
+    `🤖 Men *Bcon bot* — 3D modellar qidiruv yordamchisiman.\n\n` +
     `📸 *Rasm yuborib qidiring:*\n` +
     `Menga istalgan 3D model rasmini yuboring — men bazamdan o'xshash modellarni topib, arxiv faylini yuboraman.\n\n` +
     `📋 *Komandalar:*\n` +
@@ -342,7 +354,7 @@ bot.help(async (ctx) => {
     `💡 *Maslahat:* Aniqroq rasm yuborsangiz, natija ham aniqroq bo'ladi!`;
 
   if (ads.length > 0) {
-    text += `\n\n📢 *Reklamalar:*\n` + ads.map((ad) => `• ${ad}`).join('\n');
+    text += `\n\n📢 *Reklamalar:*\n`;
   }
 
   ctx.reply(text, { parse_mode: 'Markdown' });
@@ -352,7 +364,7 @@ bot.help(async (ctx) => {
 bot.command('admin', async (ctx) => {
   const isAdmin = await isAdminUser(ctx.from.id);
   if (!isAdmin) {
-    return ctx.reply('⛔ Siz admin bo\'lmaysiz.');
+    return ctx.reply('⛔ Siz admin emasiz.');
   }
 
   await ctx.reply('🛠️ Admin paneli', {
@@ -598,7 +610,7 @@ bot.on('photo', async (ctx) => {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         console.log(`📥 Rasm yuklanmoqda (${attempt}/3): ${fileLink.href}`);
-        imageResponse = await axios.get(fileLink.href, {
+        imageResponse = await axiosInstance.get(fileLink.href, {
           responseType: 'arraybuffer',
           timeout: 60000 + (attempt * 10000) // 60s, 70s, 80s
         });
@@ -786,7 +798,19 @@ bot.on('text', async (ctx) => {
     }
 
     // 3. Vektor qidiruv (matn uchun threshold biroz pastroq)
-    const matches = await findBestMatches(textEmbedding, 10, 0.4);
+    let matches = [];
+    try {
+      matches = await findBestMatches(textEmbedding, 10, 0.3);
+      console.log('🔎 Text vector search results:', matches.length, 'scores:', matches.map((m) => m.score));
+    } catch (vecErr) {
+      console.warn('Text vector search xatoligi (fallback ishlatilmoqda):', vecErr.message);
+    }
+
+    if (matches.length === 0) {
+      console.log('📝 Text vector search bo\'sh, lexical fallback ishlatilmoqda');
+      matches = await findTextMatches(query, 10);
+      console.log('📝 Text lexical fallback results:', matches.length, 'scores:', matches.map((m) => m.score));
+    }
 
     if (matches.length === 0) {
       let fallbackText = `😕 "${query}" bo'yicha bazamda mos model topilmadi.`;
