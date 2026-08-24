@@ -21,6 +21,15 @@ const { describeImage, analyzeTextQuery } = require('./services/cloudflareAi');
 
 const { createSession, getSession, getCurrentPage, nextPage, prevPage } = require('./services/userSession');
 const { getStats, getRandomModel, incrementSearchCounts } = require('./services/statsService');
+const { shouldBypassAccessCheck } = require('./publicAccess');
+const { acquireSingleInstanceLock, releaseSingleInstanceLock } = require('./singleInstance');
+
+const registerStartCommand = require('./commands/start');
+const registerHelpCommand = require('./commands/help');
+const registerAdminCommand = require('./commands/admin');
+const registerStatsCommand = require('./commands/stats');
+const registerRandomCommand = require('./commands/random');
+const registerRefreshCommand = require('./commands/refresh');
 
 const axiosInstance = axios.create({
   timeout: 60000,
@@ -90,6 +99,13 @@ function getPendingAdDraft(userId) {
 function setPendingAdDraft(userId, draft) {
   pendingAdDrafts.set(userId, draft);
 }
+
+registerStartCommand(bot, { trackStartedUser, Markup });
+registerHelpCommand(bot, { getAds });
+registerAdminCommand(bot, { isAdminUser, getAdminMenuKeyboard });
+registerStatsCommand(bot, { getStats, getCatalogInfo });
+registerRandomCommand(bot, { getRandomModel });
+registerRefreshCommand(bot, { refreshCatalog, getCatalogInfo });
 
 function clearPendingAdDraft(userId) {
   pendingAdDrafts.delete(userId);
@@ -221,17 +237,17 @@ bot.use(async (ctx, next) => {
     return next();
   }
 
-  const allowed = await ensureBotAccess(ctx);
-  if (!allowed) {
-    return;
-  }
-
   const messageText = ctx.message?.text || '';
   const isHelpCommand = messageText.startsWith('/help');
   const isAdminCommand = messageText.startsWith('/admin') || messageText.startsWith('/admin_');
 
-  if (isHelpCommand) {
+  if (shouldBypassAccessCheck(ctx) || isHelpCommand) {
     return next();
+  }
+
+  const allowed = await ensureBotAccess(ctx);
+  if (!allowed) {
+    return;
   }
 
   if (isAdminCommand) {
@@ -312,267 +328,7 @@ bot.on('photo', async (ctx, next) => {
   return;
 });
 
-// ─── /start ──────────────────────────────────────────────────────────────────
-bot.start((ctx) => {
-  const userId = Number(ctx.from?.id || 0);
-  trackStartedUser(userId);
-
-  const name = ctx.from.first_name || 'do\'stim';
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🆘 Yordam', 'start_help')],
-    [Markup.button.callback('📊 Statistika', 'start_stats')],
-    [Markup.button.callback('🎲 Tasodifiy model', 'start_random')]
-  ]);
-
-  ctx.reply(
-    `Salom, ${name}! 👋\n\n` +
-    `🤖 Men *Bcon bot* — 3D modellar qidiruv yordamchisiman.\n\n` +
-    `📸 *Rasm yuborib qidiring:*\n` +
-    `Menga istalgan 3D model rasmini yuboring — men bazamdan o'xshash modellarni topib, arxiv faylini yuboraman.\n\n` +
-    `📋 *Komandalar:*\n` +
-    `/help — barcha komandalar\n` +
-    `/stats — bazadagi modellar statistikasi\n` +
-    `/random — tasodifiy model ko'rish`,
-    { parse_mode: 'Markdown', ...keyboard }
-  );
-});
-
-// ─── /help ───────────────────────────────────────────────────────────────────
-bot.help(async (ctx) => {
-  const ads = await getAds();
-  let text =
-    `📋 *Mavjud komandalar:*\n\n` +
-    `/start — Botni boshlash\n` +
-    `/help — Shu yordam xabari\n` +
-    `/stats — Bazadagi modellar statistikasi\n` +
-    `/random — Bazadan tasodifiy model\n` +
-    `/refresh — Katalogni yangilash (yangi modellar)\n` +
-    `/admin — Admin paneli\n\n` +
-    `📸 *Qidiruv usullari:*\n` +
-    `• Rasm yuboring — o'xshash 3D modellar topiladi\n` +
-    `• Matn yozing — tavsif bo'yicha qidiruv\n\n` +
-    `💡 *Maslahat:* Aniqroq rasm yuborsangiz, natija ham aniqroq bo'ladi!`;
-
-  if (ads.length > 0) {
-    text += `\n\n📢 *Reklamalar:*\n`;
-  }
-
-  ctx.reply(text, { parse_mode: 'Markdown' });
-});
-
-// ─── /stats ──────────────────────────────────────────────────────────────────
-bot.command('admin', async (ctx) => {
-  const isAdmin = await isAdminUser(ctx.from.id);
-  if (!isAdmin) {
-    return ctx.reply('⛔ Siz admin emasiz.');
-  }
-
-  await ctx.reply('🛠️ Admin paneli', {
-    reply_markup: getAdminMenuKeyboard().reply_markup
-  });
-});
-
-bot.command('admin_add_ad', async (ctx) => {
-  const isAdmin = await isAdminUser(ctx.from.id);
-  if (!isAdmin) {
-    return ctx.reply('⛔ Siz admin bo\'lmaysiz.');
-  }
-
-  const adText = ctx.message.text.replace(/^\/admin_add_ad\s+/i, '').trim();
-  const draft = getPendingAdDraft(ctx.from.id);
-  if (adText) {
-    draft.text = adText;
-  }
-
-  setPendingAdDraft(ctx.from.id, draft);
-
-  let text = '📝 Reklama yaratish boshlandi.\n\n';
-  text += '1) Rasm qo‘shish uchun tugmani bosing\n';
-  text += '2) Matn qo‘shish uchun tugmani bosing\n';
-  text += '3) ✅ Tekshirish tugmasini bosing\n\n';
-  text += 'Agar rasm kerak bo\'lmasa, faqat matn yozing.\n';
-  text += 'Agar bekor qilmoqchi bo\'lsangiz, /cancel_ad yuboring.';
-
-  if (draft.text) {
-    text += `\n\nHozirgi matn:\n${draft.text}`;
-  }
-
-  await ctx.reply(text, {
-    reply_markup: getAdStepKeyboard().reply_markup
-  });
-});
-
-bot.command('admin_add_channel', async (ctx) => {
-  const isAdmin = await isAdminUser(ctx.from.id);
-  if (!isAdmin) {
-    return ctx.reply('⛔ Siz admin bo\'lmaysiz.');
-  }
-
-  const channel = ctx.message.text.replace(/^\/admin_add_channel\s+/i, '').trim();
-  if (!channel) {
-    return ctx.reply('📣 Format: /admin_add_channel @username');
-  }
-
-  const existingChannels = await getRequiredChannels();
-  const normalized = normalizeChannelName(channel);
-  if (!normalized) {
-    return ctx.reply('⚠️ Kanal nomi noto\'g\'ri. Iltimos, @username yoki t.me/username formatidan foydalaning.');
-  }
-
-  if (!existingChannels.includes(normalized)) {
-    existingChannels.push(normalized);
-  }
-  await setRequiredChannels(existingChannels);
-  await ctx.reply(`✅ Majburiy kanal qo\'shildi: ${normalized}`);
-});
-
-bot.command('admin_add_user', async (ctx) => {
-  const isAdmin = await isAdminUser(ctx.from.id);
-  if (!isAdmin) {
-    return ctx.reply('⛔ Siz admin bo\'lmaysiz.');
-  }
-
-  const rawId = ctx.message.text.replace(/^\/admin_add_user\s+/i, '').trim();
-  const userId = Number(rawId);
-  if (!userId) {
-    return ctx.reply('👤 Format: /admin_add_user <telegram_user_id>');
-  }
-
-  const allowedUsers = await getAllowedUsers();
-  if (!allowedUsers.includes(userId)) {
-    allowedUsers.push(userId);
-    await setAllowedUsers(allowedUsers);
-  }
-
-  await ctx.reply(`✅ Foydalanuvchi qo\'shildi: ${userId}`);
-});
-
-bot.command('admin_remove_user', async (ctx) => {
-  const isAdmin = await isAdminUser(ctx.from.id);
-  if (!isAdmin) {
-    return ctx.reply('⛔ Siz admin bo\'lmaysiz.');
-  }
-
-  const rawId = ctx.message.text.replace(/^\/admin_remove_user\s+/i, '').trim();
-  const userId = Number(rawId);
-  if (!userId) {
-    return ctx.reply('👤 Format: /admin_remove_user <telegram_user_id>');
-  }
-
-  const allowedUsers = await getAllowedUsers();
-  const filtered = allowedUsers.filter((id) => id !== userId);
-  await setAllowedUsers(filtered);
-  await ctx.reply(`✅ Foydalanuvchi chiqarildi: ${userId}`);
-});
-
-bot.command('admin_list', async (ctx) => {
-  const isAdmin = await isAdminUser(ctx.from.id);
-  if (!isAdmin) {
-    return ctx.reply('⛔ Siz admin bo\'lmaysiz.');
-  }
-
-  const allowedUsers = await getAllowedUsers();
-  const requiredChannels = await getRequiredChannels();
-  const ads = await getAds();
-  const statusText = requiredChannels.length > 0
-    ? requiredChannels.map((channel) => `• ${channel}`).join('\n')
-    : 'yo\'q';
-
-  await ctx.reply(
-    '📋 Admin konfiguratsiyasi:\n\n' +
-    `👤 Foydalanuvchilar: ${allowedUsers.join(', ') || 'yo\'q'}\n` +
-    `📣 Majburiy kanallar:\n${statusText}\n` +
-    `📢 Reklamalar: ${ads.length || 0} ta`,
-    { parse_mode: 'Markdown' }
-  );
-});
-
-bot.command('stats', async (ctx) => {
-  try {
-    const stats = await getStats();
-    const catalogInfo = getCatalogInfo();
-
-    let text =
-      `📊 <b>Bcin Statistika</b>\n\n` +
-      `📦 Jami modellar: <b>${stats.totalModels}</b>\n` +
-      `🧬 Embedding tayyor: <b>${stats.withEmbedding}</b>\n` +
-      `📡 Kanallar soni: <b>${stats.channels.length}</b>\n`;
-
-    if (stats.channels.length > 0) {
-      text += `\n📡 <b>Kanallar:</b>\n`;
-      text += stats.channels.map((ch) => `  • @${ch}`).join('\n');
-    }
-
-    if (Object.keys(stats.categories).length > 0) {
-      text += `\n\n🏷 <b>Kategoriyalar:</b>\n`;
-      for (const [cat, count] of Object.entries(stats.categories)) {
-        text += `  • ${cat}: ${count} ta\n`;
-      }
-    }
-
-    if (catalogInfo.loaded) {
-      text += `\n🧠 Xotiradagi katalog: <b>${catalogInfo.count}</b> ta model`;
-      if (catalogInfo.lastLoadTime) {
-        text += `\n⏰ Oxirgi yuklash: ${catalogInfo.lastLoadTime.toLocaleString('uz-UZ')}`;
-      }
-    }
-
-    ctx.reply(text, { parse_mode: 'HTML' });
-  } catch (err) {
-    console.error('/stats xatoligi:', err);
-    ctx.reply('❌ Statistikani olishda xatolik yuz berdi.');
-  }
-});
-
-// ─── /random ─────────────────────────────────────────────────────────────────
-bot.command('random', async (ctx) => {
-  try {
-    const model = await getRandomModel();
-    if (!model) {
-      return ctx.reply('😕 Bazada hali hech qanday model yo\'q.');
-    }
-
-    try {
-      await ctx.telegram.forwardMessage(ctx.chat.id, `@${model.channelUsername}`, model.messageId);
-    } catch (fwdErr) {
-      // Forward ishlamasa, ma'lumotni matn sifatida ko'rsatamiz
-      console.warn(`Forward xatoligi (random): ${fwdErr.message}`);
-    }
-
-    let text =
-      `🎲 *Tasodifiy model:*\n\n` +
-      `📦 ${model.documentFileName}\n` +
-      `📡 Manba: @${model.channelUsername}`;
-    if (model.category) text += `\n🏷 Kategoriya: ${model.category}`;
-    if (model.tags && model.tags.length > 0) text += `\n🔖 Teglar: ${model.tags.join(', ')}`;
-    if (model.caption) text += `\n📝 ${model.caption.substring(0, 200)}`;
-
-    ctx.reply(text, { parse_mode: 'Markdown' });
-  } catch (err) {
-    console.error('/random xatoligi:', err);
-    ctx.reply('❌ Tasodifiy model olishda xatolik yuz berdi.');
-  }
-});
-
-// ─── /refresh ────────────────────────────────────────────────────────────────
-bot.command('refresh', async (ctx) => {
-  try {
-    const msg = await ctx.reply('🔄 Katalog yangilanmoqda...');
-    const added = await refreshCatalog();
-    const info = getCatalogInfo();
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      msg.message_id,
-      null,
-      `✅ Katalog yangilandi!\n\n` +
-      `➕ Yangi qo'shildi: ${added} ta\n` +
-      `📦 Jami xotirada: ${info.count} ta model`
-    );
-  } catch (err) {
-    console.error('/refresh xatoligi:', err);
-    ctx.reply('❌ Katalogni yangilashda xatolik yuz berdi.');
-  }
-});
+// Command handlers are registered from bot/commands/*.js modules.
 
 // ─── Rasm qidiruv ────────────────────────────────────────────────────────────
 bot.on('photo', async (ctx) => {
@@ -645,12 +401,34 @@ bot.on('photo', async (ctx) => {
       })
     ]);
 
-    if (queryEmbedding.status === 'rejected') {
-      throw new Error('Rasm embedding hisoblashda xatolik: ' + queryEmbedding.reason?.message);
+    const aiData = cloudflareResult.status === 'fulfilled' ? cloudflareResult.value : null;
+
+    let embedding = null;
+    if (queryEmbedding.status === 'fulfilled' && queryEmbedding.value) {
+      embedding = queryEmbedding.value;
+    } else {
+      console.warn('⚠️ Image CLIP embedding mavjud emas:', queryEmbedding.reason?.message || 'unknown');
+      if (aiData?.englishDescription) {
+        await updateStatus(ctx, statusMsg, '🧠 Rasm embedding ishlamadi, tasvir tavsifidan qidirilmoqda...');
+        const fallbackEmbedding = await getTextEmbedding(aiData.englishDescription);
+        if (fallbackEmbedding) {
+          embedding = fallbackEmbedding;
+        } else {
+          const lexicalMatches = await findTextMatches(aiData.englishDescription, 10);
+          if (lexicalMatches.length > 0) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id).catch(() => {});
+            const session = createSession(ctx.from.id, lexicalMatches, 'image', aiData.description || '');
+            incrementSearchCounts(lexicalMatches.map((m) => m._id)).catch(() => {});
+            await sendResultsPage(ctx, ctx.from.id, aiData);
+            return;
+          }
+        }
+      }
     }
 
-    let embedding = queryEmbedding.value;
-    const aiData = cloudflareResult.status === 'fulfilled' ? cloudflareResult.value : null;
+    if (!embedding) {
+      throw new Error('Rasm embedding hisoblashda xatolik. Iltimos, matn bilan qidirib ko\'ring.');
+    }
 
     // 3. AI tavsifini ko'rsatish
     if (aiData && aiData.description) {
@@ -794,16 +572,24 @@ bot.on('text', async (ctx) => {
       textEmbedding = await getTextEmbedding(searchTerms);
     } catch (embErr) {
       console.warn('Text embedding xatoligi, asl matn bilan urinilmoqda:', embErr.message);
-      textEmbedding = await getTextEmbedding(query);
+      try {
+        textEmbedding = await getTextEmbedding(query);
+      } catch (fallbackErr) {
+        console.warn('Text embedding fallback xatoligi:', fallbackErr.message);
+        textEmbedding = null;
+      }
     }
 
     // 3. Vektor qidiruv (matn uchun threshold biroz pastroq)
     let matches = [];
-    try {
-      matches = await findBestMatches(textEmbedding, 10, 0.3);
-      console.log('🔎 Text vector search results:', matches.length, 'scores:', matches.map((m) => m.score));
-    } catch (vecErr) {
-      console.warn('Text vector search xatoligi (fallback ishlatilmoqda):', vecErr.message);
+    if (textEmbedding) {
+      try {
+        matches = await findBestMatches(textEmbedding, 10, 0.3);
+        console.log('🔎 Text vector search results:', matches.length, 'scores:', matches.map((m) => m.score));
+      } catch (vecErr) {
+        console.warn('Text vector search xatoligi (fallback ishlatilmoqda):', vecErr.message);
+        textEmbedding = null;
+      }
     }
 
     if (matches.length === 0) {
@@ -1051,7 +837,7 @@ async function sendResultsPage(ctx, userId, aiInfo, isEdit = false) {
   text += `📄 *Model ${pageData.page + 1}/${pageData.totalPages}*\n\n`;
   text += `📦 *${match.documentFileName}*\n`;
   text += `🎯 O'xshashlik: *${percent}%*\n`;
-  text += `📡 Manba: @${match.channelUsername}\n`;
+  text += `📡 Manba: ${match.channelUsername}\n`;
   if (match.category) text += `🏷 ${match.category}\n`;
   if (match.tags && match.tags.length > 0) {
     text += `🔖 ${match.tags.slice(0, 5).join(', ')}\n`;
@@ -1208,6 +994,11 @@ async function launchBotWithRetry(maxAttempts = 3) {
 }
 
 async function main() {
+  if (!acquireSingleInstanceLock()) {
+    console.error('❌ Bot allaqachon ishlamoqda. Bitta nusxa faqat bitta jarayon bo‘lishi kerak.');
+    process.exit(1);
+  }
+
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ MongoDB ulandi');
@@ -1236,5 +1027,13 @@ main().catch((err) => {
   process.exit(1);
 });
 
-process.once('SIGINT', () => { try { bot.stop('SIGINT') } catch (e) { } process.exit(0); });
-process.once('SIGTERM', () => { try { bot.stop('SIGTERM') } catch (e) { } process.exit(0); });
+process.once('SIGINT', () => {
+  try { bot.stop('SIGINT'); } catch (e) { }
+  releaseSingleInstanceLock();
+  process.exit(0);
+});
+process.once('SIGTERM', () => {
+  try { bot.stop('SIGTERM'); } catch (e) { }
+  releaseSingleInstanceLock();
+  process.exit(0);
+});

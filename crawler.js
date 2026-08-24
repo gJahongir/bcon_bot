@@ -144,8 +144,36 @@ async function crawlChannel(client, channelUsername) {
       await client.downloadMedia(matchedPhoto.photoMessage, { outputFile: imagePath });
       usedPhotoIds.add(matchedPhoto.id);
 
-      // Arxiv faylini buffer sifatida yuklab ol
-      const fileBuffer = await client.downloadMedia(docEntry.documentMessage);
+      // Arxiv faylini buffer sifatida yuklab ol (retry va fallback bilan)
+      let fileBuffer;
+      const MAX_DOWNLOAD_ATTEMPTS = 2;
+      let attempt = 0;
+      while (attempt < MAX_DOWNLOAD_ATTEMPTS) {
+        attempt += 1;
+        try {
+          fileBuffer = await client.downloadMedia(docEntry.documentMessage);
+          break;
+        } catch (err) {
+          console.warn(`  ⚠️ download attempt ${attempt} failed for ${docEntry.documentFileName}:`, err.message);
+          if (attempt >= MAX_DOWNLOAD_ATTEMPTS) {
+            // Fallback: yazib olib keyin o'qib olish (outputFile)
+            const tmp = require('os').tmpdir();
+            const tmpPath = path.join(tmp, `dl_${Date.now()}_${docEntry.documentFileName}`);
+            try {
+              console.log('  ℹ️ attempting fallback download to file:', tmpPath);
+              await client.downloadMedia(docEntry.documentMessage, { outputFile: tmpPath });
+              fileBuffer = fs.readFileSync(tmpPath);
+              try { fs.unlinkSync(tmpPath); } catch (e) { /* ignore cleanup errors */ }
+              break;
+            } catch (fallbackErr) {
+              try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) {}
+              throw fallbackErr;
+            }
+          }
+          // small delay before retry
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
       const fileType = docEntry.documentFileName.match(/\.(rar|zip)$/i)[1].toLowerCase();
 
       await Model3D.create({
