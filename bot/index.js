@@ -880,8 +880,31 @@ async function sendResultsPage(ctx, userId, aiInfo, isEdit = false) {
 }
 
 async function getPreviewPhotoBuffer(channelUsername, photoMessageId, imagePath = '') {
-  if (imagePath && fs.existsSync(imagePath)) {
-    return fs.readFileSync(imagePath);
+  const candidatePaths = [];
+
+  if (imagePath) {
+    const normalized = String(imagePath).trim();
+    if (normalized) {
+      if (path.isAbsolute(normalized)) {
+        candidatePaths.push(normalized);
+      } else {
+        candidatePaths.push(
+          path.resolve(process.cwd(), normalized),
+          path.resolve(__dirname, '..', normalized),
+          path.resolve(__dirname, '..', 'downloaded_images', path.basename(normalized))
+        );
+      }
+    }
+  }
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (candidate && fs.existsSync(candidate)) {
+        return fs.readFileSync(candidate);
+      }
+    } catch (err) {
+      console.warn('⚠️ Preview fayl yo‘lini tekshirishda xatolik:', err.message);
+    }
   }
 
   if (!photoMessageId) {
@@ -899,7 +922,22 @@ async function getPreviewPhotoBuffer(channelUsername, photoMessageId, imagePath 
       return null;
     }
 
-    return await client.downloadMedia(photoMessage);
+    const media = await client.downloadMedia(photoMessage);
+
+    if (Buffer.isBuffer(media)) {
+      return media;
+    }
+    if (media instanceof ArrayBuffer) {
+      return Buffer.from(media);
+    }
+    if (ArrayBuffer.isView(media)) {
+      return Buffer.from(media.buffer, media.byteOffset, media.byteLength);
+    }
+    if (media && typeof media === 'object' && media.data) {
+      return Buffer.from(media.data);
+    }
+
+    return null;
   } catch (err) {
     console.warn(`⚠️ Preview rasmni olishda xatolik (${channelUsername}/${photoMessageId}):`, err.message);
     return null;
@@ -968,7 +1006,7 @@ async function launchBotWithRetry(maxAttempts = 3) {
       await bot.launch({ dropPendingUpdates: true });
       console.log('');
       console.log('═══════════════════════════════════════════');
-      console.log('  🤖 Bcin Bot ishga tushdi!');
+      console.log('  🤖 Bcon Bot ishga tushdi!');
       console.log('  📸 Rasm qidiruv ✅');
       console.log('  ✍️  Matn qidiruv ✅');
       console.log('  🧩 Model preview flow ✅');
