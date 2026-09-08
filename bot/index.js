@@ -1008,7 +1008,7 @@ async function launchBotWithRetry(maxAttempts = 3) {
       console.log('═══════════════════════════════════════════');
       console.log('  🤖 Bcon Bot ishga tushdi!');
       console.log('  📸 Rasm qidiruv ✅');
-      console.log('  ✍️  Matn qidiruv ✅');
+      console.log('  ✍️ Matn qidiruv ✅');
       console.log('  🧩 Model preview flow ✅');
       console.log('  📊 Statistika ✅');
       console.log('═══════════════════════════════════════════');
@@ -1075,3 +1075,6 @@ process.once('SIGTERM', () => {
   releaseSingleInstanceLock();
   process.exit(0);
 });
+
+
+//kmefojnojlnonfoenojnfrkjo
