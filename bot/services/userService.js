@@ -120,6 +120,15 @@ async function setBlocked(telegramId, blocked) {
 }
 
 /**
+ * Foydalanuvchining interfeys tilini saqlaydi.
+ * @param {number} telegramId
+ * @param {string} language - til kodi (uz, ru, en, ...)
+ */
+async function setLanguage(telegramId, language) {
+  return User.updateOne({ telegramId }, { $set: { language } });
+}
+
+/**
  * Foydalanuvchini bazadan butunlay o'chiradi.
  * @param {number} telegramId
  */
@@ -161,6 +170,7 @@ module.exports = {
   getUsers,
   getUser,
   setBlocked,
+  setLanguage,
   deleteUser,
   markBotBlocked,
   getBroadcastRecipients,

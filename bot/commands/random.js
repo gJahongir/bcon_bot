@@ -1,9 +1,12 @@
+const { t, lang } = require('../services/i18n');
+
 module.exports = function registerRandomCommand(bot, { getRandomModel }) {
-  bot.command('random', async (ctx) => {
+  const sendRandom = async (ctx) => {
+    const userLang = lang(ctx);
     try {
       const model = await getRandomModel();
       if (!model) {
-        return ctx.reply('😕 Bazada hali hech qanday model yo\'q.');
+        return ctx.reply(t(userLang, 'random_empty'));
       }
 
       try {
@@ -12,19 +15,27 @@ module.exports = function registerRandomCommand(bot, { getRandomModel }) {
         console.warn(`Forward xatoligi (random): ${fwdErr.message}`);
       }
 
-      let text =
-        `🎲 *Tasodifiy model:*\n\n` +
-        `📦 ${model.documentFileName}\n` +
-        `📡 Manba: @${model.channelUsername}`;
+      let text = t(userLang, 'random_title', {
+        name: model.documentFileName,
+        channel: model.channelUsername
+      });
 
-      if (model.category) text += `\n🏷 Kategoriya: ${model.category}`;
-      if (model.tags && model.tags.length > 0) text += `\n🔖 Teglar: ${model.tags.join(', ')}`;
+      if (model.category) text += t(userLang, 'random_category', { category: model.category });
+      if (model.tags && model.tags.length > 0) text += t(userLang, 'random_tags', { tags: model.tags.join(', ') });
       if (model.caption) text += `\n📝 ${model.caption.substring(0, 200)}`;
 
-      ctx.reply(text, { parse_mode: 'Markdown' });
+      await ctx.reply(text, { parse_mode: 'Markdown' });
     } catch (err) {
       console.error('/random xatoligi:', err);
-      ctx.reply('❌ Tasodifiy model olishda xatolik yuz berdi.');
+      await ctx.reply(t(userLang, 'random_error'));
     }
+  };
+
+  bot.command('random', sendRandom);
+
+  // Start klaviaturasidagi "Tasodifiy model" tugmasi
+  bot.action('start_random', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    await sendRandom(ctx);
   });
 };

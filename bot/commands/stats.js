@@ -1,38 +1,48 @@
+const { t, lang } = require('../services/i18n');
+
 module.exports = function registerStatsCommand(bot, { getStats, getCatalogInfo }) {
-  bot.command('stats', async (ctx) => {
+  const sendStats = async (ctx) => {
+    const userLang = lang(ctx);
     try {
       const stats = await getStats();
       const catalogInfo = getCatalogInfo();
 
-      let text =
-        `📊 <b>Bcin Statistika</b>\n\n` +
-        `📦 Jami modellar: <b>${stats.totalModels}</b>\n` +
-        `🧬 Embedding tayyor: <b>${stats.withEmbedding}</b>\n` +
-        `📡 Kanallar soni: <b>${stats.channels.length}</b>\n`;
+      let text = t(userLang, 'stats_title');
+      text += t(userLang, 'stats_total_models', { count: stats.totalModels });
+      text += t(userLang, 'stats_embeddings', { count: stats.withEmbedding });
+      text += t(userLang, 'stats_channels_count', { count: stats.channels.length });
 
       if (stats.channels.length > 0) {
-        text += `\n📡 <b>Kanallar:</b>\n`;
+        text += t(userLang, 'stats_channels_title');
         text += stats.channels.map((ch) => `  • @${ch}`).join('\n');
       }
 
       if (Object.keys(stats.categories).length > 0) {
-        text += `\n\n🏷 <b>Kategoriyalar:</b>\n`;
+        text += t(userLang, 'stats_categories_title');
         for (const [cat, count] of Object.entries(stats.categories)) {
-          text += `  • ${cat}: ${count} ta\n`;
+          text += `  • ${cat}: ${count}\n`;
         }
       }
 
       if (catalogInfo.loaded) {
-        text += `\n🧠 Xotiradagi katalog: <b>${catalogInfo.count}</b> ta model`;
+        text += t(userLang, 'stats_catalog', { count: catalogInfo.count });
         if (catalogInfo.lastLoadTime) {
-          text += `\n⏰ Oxirgi yuklash: ${catalogInfo.lastLoadTime.toLocaleString('uz-UZ')}`;
+          text += t(userLang, 'stats_last_load', { time: catalogInfo.lastLoadTime.toLocaleString('uz-UZ') });
         }
       }
 
-      ctx.reply(text, { parse_mode: 'HTML' });
+      await ctx.reply(text, { parse_mode: 'HTML' });
     } catch (err) {
       console.error('/stats xatoligi:', err);
-      ctx.reply('❌ Statistikani olishda xatolik yuz berdi.');
+      await ctx.reply(t(userLang, 'stats_error'));
     }
+  };
+
+  bot.command('stats', sendStats);
+
+  // Start klaviaturasidagi "Statistika" tugmasi
+  bot.action('start_stats', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    await sendStats(ctx);
   });
 };

@@ -21,6 +21,7 @@ const { isAdmin } = require('../services/adminService');
 const adminState = require('../services/adminState');
 const userService = require('../services/userService');
 const { getStats, getPopularModels } = require('../services/statsService');
+const { t } = require('../services/i18n');
 
 const USERS_PAGE_SIZE = 8;
 const MODELS_PAGE_SIZE = 5;
@@ -124,11 +125,16 @@ module.exports = function registerAdminCommand(bot, deps) {
 
       const user = await userService.trackUser(tgUser, { isSearch, query });
 
+      // Foydalanuvchi hujjatini kontekstga yozamiz — boshqa handler'lar
+      // (tilni aniqlash uchun) qayta bazaga murojaat qilmaydi
+      if (user) ctx.state.userDoc = user;
+
       if (user && user.isBlocked && !isAdmin(tgUser.id)) {
+        const blockedText = t(user.language || 'uz', 'blocked_message');
         if (ctx.callbackQuery) {
-          await ctx.answerCbQuery('🚫 Siz bloklangansiz.').catch(() => {});
+          await ctx.answerCbQuery(blockedText).catch(() => {});
         } else {
-          await ctx.reply('🚫 Siz botdan foydalanishdan bloklangansiz.').catch(() => {});
+          await ctx.reply(blockedText).catch(() => {});
         }
         return; // next() chaqirilmaydi — zanjir to'xtaydi
       }

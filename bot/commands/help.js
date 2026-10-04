@@ -1,17 +1,15 @@
-module.exports = function registerHelpCommand(bot) {
-  bot.help(async (ctx) => {
-    let text =
-      `📋 *Mavjud komandalar:*\n\n` +
-      `/start — Botni boshlash\n` +
-      `/help — Shu yordam xabari\n` +
-      `/stats — Bazadagi modellar statistikasi\n` +
-      `/random — Bazadan tasodifiy model\n` +
-      `/refresh — Katalogni yangilash (yangi modellar)\n\n` +
-      `📸 *Qidiruv usullari:*\n` +
-      `• Rasm yuboring — o'xshash 3D modellar topiladi\n` +
-      `• Matn yozing — tavsif bo'yicha qidiruv\n\n` +
-      `💡 *Maslahat:* Aniqroq rasm yuborsangiz, natija ham aniqroq bo'ladi!`;
+const { t, lang } = require('../services/i18n');
 
-    ctx.reply(text, { parse_mode: 'Markdown' });
+module.exports = function registerHelpCommand(bot) {
+  const sendHelp = async (ctx) => {
+    await ctx.reply(t(lang(ctx), 'help_text'), { parse_mode: 'Markdown' });
+  };
+
+  bot.help(sendHelp);
+
+  // Start klaviaturasidagi "Yordam" tugmasi
+  bot.action('start_help', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    await sendHelp(ctx);
   });
 };

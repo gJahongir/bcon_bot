@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   lastName: { type: String, default: '' },
   username: { type: String, default: '' },
   languageCode: { type: String, default: '' },
+  language: { type: String, default: '' }, // foydalanuvchi tanlagan interfeys tili
   isBlocked: { type: Boolean, default: false }, // admin tomonidan bloklangan
   botBlocked: { type: Boolean, default: false }, // foydalanuvchi botni bloklagan
   searchCount: { type: Number, default: 0 },
