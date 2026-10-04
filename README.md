@@ -8,14 +8,27 @@
 4. Build and run with Docker:
 
 ```bash
-git clone <your-repo-url>
-cd the_kalon
-cp .env.example .env
-# edit .env and fill your real values
-sudo docker compose up -d --build
+git clone https://github.com/gJahongir/bcon_bot
+cd bcon_bot
+
 ```
 
 ### Notes
-- The app runs with `npm run bot`.
-- The container uses `.env` from the project root.
-- Do not commit your real `.env` file to GitHub.
+- dasturni ishlatish `npm run bot`.
+- botni oqitish `npm start`
+- botti test qilis `npm test`
+
+
+### .env ozgaruvchilari
+BOT_TOKEN=8670120518:AA........
+
+GEMINI_API_KEY=AQ.Ab8RN6K4xyqtAefqdkCdoRnh............
+TG_API_ID=31....
+TG_API_HASH=af4593b75cd6da67...
+
+
+ADMIN_USER_ID=574...  ozingizni tg id ingizni qoyas
+TG_SESSION=1AgAOMTQ5LjE1NC4x....
+MONGODB_URI=mongodb://localhost:27017/Madels3D
+
+.env   ./  va ./embedding papkasi ichida bolishi sart

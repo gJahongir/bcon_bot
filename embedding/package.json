@@ -1,5 +1,5 @@
 {
-  "name": "grabit3d-embedding",
+  "name": "bcon_bot",
   "version": "1.0.0",
   "description": "Saqlangan model rasmlari uchun CLIP embedding hisoblovchi skript",
   "main": "generateEmbeddings.js",

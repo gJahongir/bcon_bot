@@ -4,6 +4,10 @@
 
 .env
 .env.*
-!.env.example.bot.lock
-logs/
+!.env.example
+
+.bot.lock
 .bot.pid
+logs/
+downloaded_images/
+downloaded_images.zip
