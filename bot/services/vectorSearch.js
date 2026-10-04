@@ -312,10 +312,42 @@ function getCatalogInfo() {
   };
 }
 
+/**
+ * Modelni xotiradagi katalogdan o'chiradi (admin panel orqali o'chirilganda).
+ * @param {string|ObjectId} id - model _id'si
+ * @returns {boolean} - topilib o'chirilgan bo'lsa true
+ */
+function removeFromCatalog(id) {
+  const sid = String(id);
+  const index = catalog.findIndex((item) => item._id.toString() === sid);
+  if (index === -1) return false;
+  catalog.splice(index, 1);
+  return true;
+}
+
+/**
+ * Xotiradagi katalogdagi model maydonlarini yangilaydi
+ * (admin panel orqali kategoriya/teg o'zgartirilganda).
+ * @param {string|ObjectId} id - model _id'si
+ * @param {{ category?: string, tags?: string[], caption?: string }} fields
+ * @returns {boolean} - topilib yangilangan bo'lsa true
+ */
+function updateCatalogItem(id, fields = {}) {
+  const sid = String(id);
+  const item = catalog.find((entry) => entry._id.toString() === sid);
+  if (!item) return false;
+  if (fields.category !== undefined) item.category = fields.category;
+  if (fields.tags !== undefined) item.tags = fields.tags;
+  if (fields.caption !== undefined) item.caption = fields.caption;
+  return true;
+}
+
 module.exports = {
   loadCatalog,
   refreshCatalog,
   findBestMatches,
   findTextMatches,
-  getCatalogInfo
+  getCatalogInfo,
+  removeFromCatalog,
+  updateCatalogItem
 };

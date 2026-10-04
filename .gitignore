@@ -4,4 +4,4 @@
 
 .env
 .env.*
-!.env.example
+!.env.example.bot.lock

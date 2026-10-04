@@ -1,8 +1,5 @@
-module.exports = function registerStartCommand(bot, { trackStartedUser, Markup }) {
+module.exports = function registerStartCommand(bot, { Markup }) {
   bot.start((ctx) => {
-    const userId = Number(ctx.from?.id || 0);
-    trackStartedUser(userId);
-
     const name = ctx.from.first_name || 'do\'stim';
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback('🆘 Yordam', 'start_help')],
