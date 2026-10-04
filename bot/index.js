@@ -168,7 +168,7 @@ bot.on('photo', async (ctx) => {
       }
     }
 
-    const matches = await findBestMatches(embedding, 10, 0.5);
+    const matches = await findBestMatches(embedding, 50, 0.5);
 
     if (matches.length === 0) {
       let fallbackText = t(userLang, 'not_found_image');
@@ -245,14 +245,14 @@ bot.on('text', async (ctx) => {
     let matches = [];
     if (textEmbedding) {
       try {
-        matches = await findBestMatches(textEmbedding, 10, 0.3);
+        matches = await findBestMatches(textEmbedding, 50, 0.3);
       } catch (e) {
         console.warn('Vektor qidiruv xatoligi:', e.message);
       }
     }
 
     if (matches.length === 0) {
-      matches = await findTextMatches(query, 10);
+      matches = await findTextMatches(query, 50);
     }
 
     if (matches.length === 0) {
@@ -390,13 +390,12 @@ function getPreviewPhotoBuffer(imagePath = '') {
   const normalized = String(imagePath).trim();
   if (!normalized) return null;
 
-  const candidatePaths = path.isAbsolute(normalized)
-    ? [normalized]
-    : [
-        path.resolve(process.cwd(), normalized),
-        path.resolve(__dirname, '..', normalized),
-        path.resolve(__dirname, '..', 'downloaded_images', path.basename(normalized))
-      ];
+  const candidatePaths = [
+    normalized,
+    path.resolve(process.cwd(), normalized),
+    path.resolve(__dirname, '..', normalized),
+    path.resolve(__dirname, '..', 'downloaded_images', path.basename(normalized))
+  ];
 
   for (const candidate of candidatePaths) {
     try {
