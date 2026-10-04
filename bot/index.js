@@ -16,6 +16,7 @@ const { loadCatalog, findBestMatches, findTextMatches, refreshCatalog, getCatalo
 const { describeImage, analyzeTextQuery } = require('./services/cloudflareAi');
 const { searchCGTrader } = require('./services/cgtraderSearch');
 const { createSession, getSession, getCurrentPage, nextPage, prevPage } = require('./services/userSession');
+const { t, lang } = require('./services/i18n');
 const { getStats, getRandomModel, incrementSearchCounts } = require('./services/statsService');
 const { acquireSingleInstanceLock, releaseSingleInstanceLock } = require('./singleInstance');
 
@@ -65,7 +66,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN, {
 // Admin panel BIRINCHI ro'yxatdan o'tadi — foydalanuvchilarni kuzatish,
 // blok tekshiruvi va admin wizard xabarlarini qidiruvdan oldin ushlab olish uchun.
 registerAdminCommand(bot, { refreshCatalog, getCatalogInfo, loadCatalog, removeFromCatalog, updateCatalogItem });
-registerStartCommand(bot, { Markup });
+registerStartCommand(bot);
 registerHelpCommand(bot);
 registerStatsCommand(bot, { getStats, getCatalogInfo });
 registerRandomCommand(bot, { getRandomModel });
@@ -73,7 +74,7 @@ registerRefreshCommand(bot, { refreshCatalog, getCatalogInfo });
 
 // ─── Rasm qidiruv ────────────────────────────────────────────────────────────
 bot.on('photo', async (ctx) => {
-  const statusMsg = await ctx.reply('🔍 Rasm tahlil qilinmoqda...');
+  const statusMsg = await ctx.reply(t(lang(ctx), 'photo_analyzing'));
   let tempImagePath = null;
 
   try {
@@ -103,10 +104,12 @@ bot.on('photo', async (ctx) => {
       throw new Error(`Rasm yuklanib bo'lmadi: ${lastError?.message || 'Noma\'lum xatolik'}`);
     }
 
+    const userLang = lang(ctx);
+
     tempImagePath = path.join(os.tmpdir(), `grabit3d_query_${ctx.from.id}_${Date.now()}.jpg`);
     fs.writeFileSync(tempImagePath, Buffer.from(imageResponse.data));
 
-    await updateStatus(ctx, statusMsg, '🧠 AI tahlil qilmoqda...');
+    await updateStatus(ctx, statusMsg, t(userLang, 'ai_analyzing'));
 
     const base64Image = Buffer.from(imageResponse.data).toString('base64');
     const [queryEmbedding, cloudflareResult] = await Promise.allSettled([
@@ -138,9 +141,9 @@ bot.on('photo', async (ctx) => {
     }
 
     if (aiData && aiData.description) {
-      await updateStatus(ctx, statusMsg, `🔎 *Topildi:* ${aiData.description}\n🔍 Bazadan mos model qidirilmoqda...`);
+      await updateStatus(ctx, statusMsg, t(userLang, 'found_then_search', { desc: aiData.description }));
     } else {
-      await updateStatus(ctx, statusMsg, '🔎 Bazadan mos model qidirilmoqda...');
+      await updateStatus(ctx, statusMsg, t(userLang, 'searching_db'));
     }
 
     // Gibrid qidiruv: 70% rasm + 30% matn embeddingi
@@ -168,16 +171,16 @@ bot.on('photo', async (ctx) => {
     const matches = await findBestMatches(embedding, 10, 0.5);
 
     if (matches.length === 0) {
-      let fallbackText = '😕 Bazamda bunga o\'xshash model topilmadi.';
+      let fallbackText = t(userLang, 'not_found_image');
       if (aiData && aiData.keywords && aiData.keywords.length > 0) {
-        await updateStatus(ctx, statusMsg, '🌐 Onlayn bazalardan qidirilmoqda...');
+        await updateStatus(ctx, statusMsg, t(userLang, 'searching_db'));
         const cgResults = await searchCGTrader(aiData.keywords.join(' '), 4);
         if (cgResults.length > 0) {
-          fallbackText += '\n\n🌐 *Onlayn topilgan natijalar (CGTrader):*\n';
+          fallbackText += t(userLang, 'online_results');
           cgResults.forEach((r, i) => { fallbackText += `\n${i + 1}. [${r.name}](${r.url})`; });
         }
       }
-      fallbackText += '\n\n💡 Boshqa burchakdan olingan yoki aniqroq rasm bilan urinib ko\'ring.';
+      fallbackText += t(userLang, 'try_another_photo');
       await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, fallbackText, {
         parse_mode: 'Markdown', disable_web_page_preview: true
       });
@@ -191,9 +194,9 @@ bot.on('photo', async (ctx) => {
 
   } catch (error) {
     console.error('Rasm qidiruv xatoligi:', error);
-    let errorMsg = '❌ Xatolik yuz berdi. Boshqa rasm bilan urinib ko\'ring.';
+    let errorMsg = t(lang(ctx), 'error_generic');
     if (error.message?.includes('ETIMEDOUT') || error.code === 'ETIMEDOUT') {
-      errorMsg = '⏱️ Rasm yuklanish vaqti tugadi. Qayta urinib ko\'ring.';
+      errorMsg = t(lang(ctx), 'error_timeout');
     }
     ctx.reply(errorMsg);
   } finally {
@@ -209,13 +212,14 @@ bot.on('text', async (ctx) => {
 
   const query = ctx.message.text.trim();
   if (query.length < 2) {
-    return ctx.reply('✍️ Kamida 2 ta harf yozing yoki rasm yuboring.');
+    return ctx.reply(t(lang(ctx), 'min_chars'));
   }
   if (query.length > 200) {
-    return ctx.reply('⚠️ So\'rov juda uzun. Qisqaroq yozing.');
+    return ctx.reply(t(lang(ctx), 'too_long'));
   }
 
-  const statusMsg = await ctx.reply('🔍 Matn bo\'yicha qidirilmoqda...');
+  const userLang = lang(ctx);
+  const statusMsg = await ctx.reply(t(userLang, 'text_searching'));
 
   try {
     let searchTerms = query;
@@ -229,7 +233,7 @@ bot.on('text', async (ctx) => {
       console.warn('Cloudflare AI tarjima xatoligi:', cfErr.message);
     }
 
-    await updateStatus(ctx, statusMsg, `🧠 "${searchTerms}" qidirilmoqda...`);
+    await updateStatus(ctx, statusMsg, t(userLang, 'searching_terms', { terms: searchTerms }));
 
     let textEmbedding = null;
     try {
@@ -252,13 +256,13 @@ bot.on('text', async (ctx) => {
     }
 
     if (matches.length === 0) {
-      let fallbackText = `😕 "${query}" bo'yicha bazamda mos model topilmadi.`;
+      let fallbackText = t(userLang, 'not_found_text', { query });
       const cgResults = await searchCGTrader(searchTerms, 4);
       if (cgResults.length > 0) {
-        fallbackText += '\n\n🌐 *Onlayn topilgan natijalar (CGTrader):*\n';
+        fallbackText += t(userLang, 'online_results');
         cgResults.forEach((r, i) => { fallbackText += `\n${i + 1}. [${r.name}](${r.url})`; });
       } else {
-        fallbackText += '\n\n💡 Boshqa so\'z bilan yoki rasm yuborib qidirib ko\'ring.';
+        fallbackText += t(userLang, 'try_another_word');
       }
       await ctx.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, null, fallbackText, {
         parse_mode: 'Markdown', disable_web_page_preview: true
@@ -273,7 +277,7 @@ bot.on('text', async (ctx) => {
 
   } catch (error) {
     console.error('Matn qidiruv xatoligi:', error);
-    ctx.reply('❌ Qidiruv xatoligi. Boshqa so\'zlar bilan urinib ko\'ring.');
+    ctx.reply(t(lang(ctx), 'error_search'));
   }
 });
 
@@ -284,35 +288,26 @@ bot.on('callback_query', async (ctx) => {
   try {
     if (data === 'next_page') {
       const page = nextPage(ctx.from.id);
-      if (!page) return ctx.answerCbQuery('⏳ Sessiya tugagan. Qaytadan qidiring.');
-      await ctx.answerCbQuery(`📄 Model ${page.page + 1}/${page.totalPages}`);
+      if (!page) return ctx.answerCbQuery(t(lang(ctx), 'session_expired'));
+      await ctx.answerCbQuery(t(lang(ctx), 'page_answer', { page: page.page + 1, total: page.totalPages }));
       await sendResultsPage(ctx, ctx.from.id, null, false);
     } else if (data === 'prev_page') {
       const page = prevPage(ctx.from.id);
-      if (!page) return ctx.answerCbQuery('⏳ Sessiya tugagan. Qaytadan qidiring.');
-      await ctx.answerCbQuery(`📄 Model ${page.page + 1}/${page.totalPages}`);
+      if (!page) return ctx.answerCbQuery(t(lang(ctx), 'session_expired'));
+      await ctx.answerCbQuery(t(lang(ctx), 'page_answer', { page: page.page + 1, total: page.totalPages }));
       await sendResultsPage(ctx, ctx.from.id, null, false);
-    } else if (data === 'start_help') {
-      await ctx.answerCbQuery();
-      await ctx.reply('/help');
-    } else if (data === 'start_stats') {
-      await ctx.answerCbQuery();
-      await ctx.reply('/stats');
-    } else if (data === 'start_random') {
-      await ctx.answerCbQuery();
-      await ctx.reply('/random');
     } else if (data.startsWith('download_')) {
       const parts = data.replace(/^download_/, '').split('|');
-      if (parts.length < 2) return ctx.answerCbQuery('⚠️ Download parametrlari xato.');
+      if (parts.length < 2) return ctx.answerCbQuery(t(lang(ctx), 'download_params_error'));
       let channelUsername = decodeURIComponent(parts[0]);
       const primaryMessageId = Number(parts[1]);
       if (channelUsername.startsWith('@')) channelUsername = channelUsername.substring(1);
-      await ctx.answerCbQuery('🔗 Kanalga yo\'naltirilmoqda...').catch(() => {});
-      await ctx.reply(`🔗 Arxivning asl manbasi:\nhttps://t.me/${channelUsername}/${primaryMessageId}`);
+      await ctx.answerCbQuery(t(lang(ctx), 'download_redirect')).catch(() => {});
+      await ctx.reply(`${t(lang(ctx), 'download_source')}\nhttps://t.me/${channelUsername}/${primaryMessageId}`);
     }
   } catch (err) {
     console.error('Callback xatoligi:', err);
-    ctx.answerCbQuery('❌ Xatolik yuz berdi').catch(() => {});
+    ctx.answerCbQuery(t(lang(ctx), 'callback_error')).catch(() => {});
   }
 });
 
@@ -320,9 +315,10 @@ bot.on('callback_query', async (ctx) => {
 async function sendResultsPage(ctx, userId, aiInfo, isEdit = false) {
   const pageData = getCurrentPage(userId);
   if (!pageData || pageData.items.length === 0) {
-    return ctx.reply('😕 Natija topilmadi.');
+    return ctx.reply(t(lang(ctx), 'no_results'));
   }
 
+  const userLang = lang(ctx);
   const match = pageData.items[0];
   const percent = Math.round(match.score * 100);
   const username = match.channelUsername.startsWith('@')
@@ -332,21 +328,21 @@ async function sendResultsPage(ctx, userId, aiInfo, isEdit = false) {
 
   let text = '';
   if (!isEdit && aiInfo?.description) {
-    text += `🤖 *AI tahlili:* ${aiInfo.description}\n\n`;
+    text += t(userLang, 'result_ai', { desc: aiInfo.description });
   }
-  text += `📄 *Model ${pageData.page + 1}/${pageData.totalPages}*\n\n`;
+  text += t(userLang, 'result_model', { page: pageData.page + 1, total: pageData.totalPages });
   text += `📦 *${match.documentFileName}*\n`;
-  text += `🎯 O'xshashlik: *${percent}%*\n`;
-  text += `📡 Manba: ${match.channelUsername}\n`;
+  text += t(userLang, 'result_similarity', { percent });
+  text += t(userLang, 'result_source', { channel: match.channelUsername });
   if (match.category) text += `🏷 ${match.category}\n`;
   if (match.tags && match.tags.length > 0) {
     text += `🔖 ${match.tags.slice(0, 5).join(', ')}\n`;
   }
 
-  const buttons = [[Markup.button.url('⬇️ Download', sourceUrl)]];
+  const buttons = [[Markup.button.url(t(userLang, 'btn_download'), sourceUrl)]];
   const navRow = [];
-  if (pageData.hasPrev) navRow.push(Markup.button.callback('⬅️ Back', 'prev_page'));
-  if (pageData.hasNext) navRow.push(Markup.button.callback('Next ➡️', 'next_page'));
+  if (pageData.hasPrev) navRow.push(Markup.button.callback(t(userLang, 'btn_back'), 'prev_page'));
+  if (pageData.hasNext) navRow.push(Markup.button.callback(t(userLang, 'btn_next'), 'next_page'));
   if (navRow.length > 0) buttons.push(navRow);
 
   const keyboard = Markup.inlineKeyboard(buttons);
@@ -358,6 +354,23 @@ async function sendResultsPage(ctx, userId, aiInfo, isEdit = false) {
       return;
     } catch (sendErr) {
       console.warn('Photo preview yuborishda xatolik:', sendErr.message);
+    }
+  }
+
+  // Lokal rasm topilmasa — kanaldan to'g'ridan-to'g'ri nusxalaymiz
+  if (match.channelUsername && match.photoMessageId) {
+    try {
+      if (isEdit) {
+        await ctx.deleteMessage().catch(() => {});
+      }
+      await ctx.telegram.copyMessage(ctx.chat.id, match.channelUsername, match.photoMessageId, {
+        caption: text,
+        parse_mode: 'Markdown',
+        reply_markup: keyboard.reply_markup
+      });
+      return;
+    } catch (copyErr) {
+      console.warn('Kanaldan rasm nusxalashda xatolik:', copyErr.message);
     }
   }
 
@@ -406,7 +419,7 @@ async function updateStatus(ctx, statusMsg, text) {
 bot.catch((err, ctx) => {
   console.error('Bot xatoligi:', err);
   if (ctx) {
-    ctx.reply('❌ Kutilmagan xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.').catch(() => {});
+    ctx.reply(t(lang(ctx), 'error_unexpected')).catch(() => {});
   }
 });
 

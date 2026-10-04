@@ -12,7 +12,7 @@ mkdir -p "$LOG_DIR"
 cd "$BOT_DIR" || exit 1
 
 # Agar bot allaqachon ishlayotgan bo'lsa, qayta ishga tushirmaydi
-if pgrep -f "node bot/index.js" > /dev/null; then
+if pgrep -f "[n]ode bot/index.js" > /dev/null; then
     echo "$(date): Bot allaqachon ishlayapti" >> "$LOG_DIR/bot.log"
     exit 0
 fi
